@@ -3,6 +3,7 @@ package xtask
 import (
 	"runtime"
 	"sync"
+	"sync/atomic"
 )
 
 const defaultQueueLen = 100000
@@ -19,14 +20,22 @@ type taskStruct struct {
 type taskFunc func(*taskStruct)
 
 type Queue struct {
-	ch chan *taskStruct
-	fn taskFunc
-	tp sync.Pool
-	wg sync.WaitGroup
+	closed int32
+	ch     chan *taskStruct
+	fn     taskFunc
+	tp     sync.Pool
+	wg     sync.WaitGroup
 }
 
 func runTask(ts *taskStruct) {
 	ts.t.Run()
+	ts.wg.Done()
+}
+
+func failTask(ts *taskStruct) {
+	if f, ok := ts.t.(interface{ Fail() }); ok {
+		f.Fail()
+	}
 	ts.wg.Done()
 }
 
@@ -74,20 +83,22 @@ func (q *Queue) putTS(ts *taskStruct) {
 
 func (q *Queue) AddTask(t Task) {
 	ts := q.getTS(t)
-	select {
-	case q.ch <- ts:
-	default:
-		go func() {
-			if f, ok := t.(interface{ Fail() }); ok {
-				f.Fail()
-			}
-			ts.wg.Done()
-		}()
+	if atomic.LoadInt32(&q.closed) == 0 {
+		select {
+		case q.ch <- ts:
+		default:
+			go failTask(ts)
+		}
+	} else {
+		go failTask(ts)
 	}
 	q.putTS(ts)
 }
 
 func (q *Queue) Stop() {
+	if atomic.SwapInt32(&q.closed, 1) != 0 {
+		return
+	}
 	close(q.ch)
 	q.wg.Wait()
 }
