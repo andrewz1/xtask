@@ -71,6 +71,15 @@ func (p *Pool) putTS(ts *taskStruct) {
 
 func (p *Pool) Queue(t Task) {
 	ts := p.getTS(t)
-	p.ch <- ts
+	select {
+	case p.ch <- ts:
+	default:
+		go func() {
+			if f, ok := t.(interface{ Fail() }); ok {
+				f.Fail()
+			}
+			ts.wg.Done()
+		}()
+	}
 	p.putTS(ts)
 }
