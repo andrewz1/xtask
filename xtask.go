@@ -26,6 +26,7 @@ type Pool struct {
 
 func runTask(ts *taskStruct) {
 	ts.t.Run()
+	ts.wg.Done()
 }
 
 func NewQueue(wk, ql int) (p *Pool) {
@@ -63,7 +64,7 @@ func (p *Pool) getTS(t Task) (ts *taskStruct) {
 }
 
 func (p *Pool) putTS(ts *taskStruct) {
-	ts.wg.Done()
+	ts.wg.Wait()
 	ts.t = nil
 	p.tp.Put(ts)
 }
