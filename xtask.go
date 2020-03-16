@@ -22,6 +22,7 @@ type Queue struct {
 	ch chan *taskStruct
 	fn taskFunc
 	tp sync.Pool
+	wg sync.WaitGroup
 }
 
 func runTask(ts *taskStruct) {
@@ -41,6 +42,7 @@ func NewQueue(wk, ql int) (q *Queue) {
 		fn: runTask,
 	}
 	for i := 0; i < wk; i++ {
+		q.wg.Add(1)
 		go q.worker()
 	}
 	return q
@@ -50,6 +52,7 @@ func (q *Queue) worker() {
 	for ts := range q.ch {
 		q.fn(ts)
 	}
+	q.wg.Done()
 }
 
 func (q *Queue) getTS(t Task) (ts *taskStruct) {
@@ -82,4 +85,9 @@ func (q *Queue) AddTask(t Task) {
 		}()
 	}
 	q.putTS(ts)
+}
+
+func (q *Queue) Stop() {
+	close(q.ch)
+	q.wg.Wait()
 }
