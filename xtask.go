@@ -18,7 +18,7 @@ type taskStruct struct {
 
 type taskFunc func(*taskStruct)
 
-type Pool struct {
+type Queue struct {
 	ch chan *taskStruct
 	fn taskFunc
 	tp sync.Pool
@@ -29,31 +29,31 @@ func runTask(ts *taskStruct) {
 	ts.wg.Done()
 }
 
-func NewQueue(wk, ql int) (p *Pool) {
+func NewQueue(wk, ql int) (q *Queue) {
 	if wk <= 0 {
 		wk = runtime.NumCPU()
 	}
 	if ql <= 0 {
 		ql = defaultQueueLen
 	}
-	p = &Pool{
+	q = &Queue{
 		ch: make(chan *taskStruct, ql),
 		fn: runTask,
 	}
 	for i := 0; i < wk; i++ {
-		go p.worker()
+		go q.worker()
 	}
-	return p
+	return q
 }
 
-func (p *Pool) worker() {
-	for ts := range p.ch {
-		p.fn(ts)
+func (q *Queue) worker() {
+	for ts := range q.ch {
+		q.fn(ts)
 	}
 }
 
-func (p *Pool) getTS(t Task) (ts *taskStruct) {
-	if v := p.tp.Get(); v != nil {
+func (q *Queue) getTS(t Task) (ts *taskStruct) {
+	if v := q.tp.Get(); v != nil {
 		ts = v.(*taskStruct)
 	} else {
 		ts = &taskStruct{}
@@ -63,16 +63,16 @@ func (p *Pool) getTS(t Task) (ts *taskStruct) {
 	return
 }
 
-func (p *Pool) putTS(ts *taskStruct) {
+func (q *Queue) putTS(ts *taskStruct) {
 	ts.wg.Wait()
 	ts.t = nil
-	p.tp.Put(ts)
+	q.tp.Put(ts)
 }
 
-func (p *Pool) Queue(t Task) {
-	ts := p.getTS(t)
+func (q *Queue) AddTask(t Task) {
+	ts := q.getTS(t)
 	select {
-	case p.ch <- ts:
+	case q.ch <- ts:
 	default:
 		go func() {
 			if f, ok := t.(interface{ Fail() }); ok {
@@ -81,5 +81,5 @@ func (p *Pool) Queue(t Task) {
 			ts.wg.Done()
 		}()
 	}
-	p.putTS(ts)
+	q.putTS(ts)
 }
