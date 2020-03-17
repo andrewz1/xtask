@@ -33,8 +33,15 @@ func runTask(ts *taskStruct) {
 }
 
 func failTask(ts *taskStruct) {
-	if f, ok := ts.t.(interface{ Fail() }); ok {
-		f.Fail()
+	if f, ok := ts.t.(interface{ Failed() }); ok {
+		f.Failed()
+	}
+	ts.wg.Done()
+}
+
+func stopTask(ts *taskStruct) {
+	if f, ok := ts.t.(interface{ Stopped() }); ok {
+		f.Stopped()
 	}
 	ts.wg.Done()
 }
@@ -90,7 +97,7 @@ func (q *Queue) AddTask(t Task) {
 			go failTask(ts)
 		}
 	} else {
-		go failTask(ts)
+		go stopTask(ts)
 	}
 	q.putTS(ts)
 }
