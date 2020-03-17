@@ -88,13 +88,17 @@ func (q *Queue) putTS(ts *taskStruct) {
 	q.tp.Put(ts)
 }
 
-func (q *Queue) AddTask(t Task) {
+func (q *Queue) AddTask(t Task, mayFail bool) {
 	ts := q.getTS(t)
 	if atomic.LoadInt32(&q.closed) == 0 {
-		select {
-		case q.ch <- ts:
-		default:
-			go failTask(ts)
+		if mayFail {
+			select {
+			case q.ch <- ts:
+			default:
+				go failTask(ts)
+			}
+		} else {
+			q.ch <- ts
 		}
 	} else {
 		go stopTask(ts)
