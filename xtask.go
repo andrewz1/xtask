@@ -86,6 +86,7 @@ func (q *Queue) putTS(ts *taskStruct) {
 }
 
 func (q *Queue) AddTask(t Task, mayFail bool) {
+	defer runtime.Gosched()
 	ts := q.getTS(t)
 	defer q.putTS(ts)
 	if q.stopped() {
