@@ -29,20 +29,6 @@ func (ts *taskStruct) runTS() {
 	ts.wg.Done()
 }
 
-func (ts *taskStruct) failTS() {
-	if f, ok := ts.Task.(interface{ Failed() }); ok {
-		f.Failed()
-	}
-	ts.wg.Done()
-}
-
-func (ts *taskStruct) stopTS() {
-	if f, ok := ts.Task.(interface{ Stopped() }); ok {
-		f.Stopped()
-	}
-	ts.wg.Done()
-}
-
 func NewQueue(wk, ql int) (q *Queue) {
 	if wk <= 0 {
 		wk = runtime.NumCPU()
@@ -85,33 +71,24 @@ func (q *Queue) putTS(ts *taskStruct) {
 	q.tp.Put(ts)
 }
 
-func (q *Queue) AddTask(t Task, mayFail bool) {
-	defer runtime.Gosched()
+func (q *Queue) AddTask(t Task) {
 	ts := q.getTS(t)
-	defer q.putTS(ts)
-	if q.stopped() {
-		go ts.stopTS()
-		return
-	}
-	if mayFail {
-		select {
-		case q.ch <- ts:
-		default:
-			go ts.failTS()
-		}
-	} else {
+	defer func() {
+		q.putTS(ts)
+		runtime.Gosched()
+	}()
+	if !q.Stopped() {
 		q.ch <- ts
 	}
 }
 
 func (q *Queue) Stop() {
-	if atomic.SwapInt32(&q.closed, 1) != 0 {
-		return
+	if atomic.CompareAndSwapInt32(&q.closed, 0, 1) {
+		close(q.ch)
+		q.wg.Wait()
 	}
-	close(q.ch)
-	q.wg.Wait()
 }
 
-func (q *Queue) stopped() bool {
+func (q *Queue) Stopped() bool {
 	return atomic.LoadInt32(&q.closed) != 0
 }
