@@ -6,7 +6,10 @@ import (
 	"sync/atomic"
 )
 
-const defaultQueueLen = 100000
+const (
+	defaultQueueLen = 100000
+	minWorkers      = 4
+)
 
 type Task interface {
 	Run()
@@ -31,7 +34,9 @@ func (ts *taskStruct) runTS() {
 
 func NewQueue(wk, ql int) (q *Queue) {
 	if wk <= 0 {
-		wk = runtime.NumCPU()
+		if wk = runtime.NumCPU(); wk < minWorkers {
+			wk = minWorkers
+		}
 	}
 	if ql <= 0 {
 		ql = defaultQueueLen

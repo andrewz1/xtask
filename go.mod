@@ -1,3 +1,3 @@
 module github.com/andrewz1/xtask
 
-go 1.14
+go 1.17
